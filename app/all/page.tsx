@@ -3,6 +3,16 @@ import Link from 'next/link'
 import { supabase } from '@/lib/supabase'
 import ItemsAllTable from './ItemsAllTable'
 
+type JoinedItemRow = {
+  id: string
+  name: string
+  unit: string | null
+  on_hand: number | null
+  max_capacity: number | null
+  alert_level: number | null
+  tiles?: { id?: string; name: string }
+}
+
 export default async function AllItemsPage() {
   const { data } = await supabase
     .from('items')
@@ -10,7 +20,7 @@ export default async function AllItemsPage() {
     .order('tiles(name)', { ascending: true })
     .order('name', { ascending: true })
 
-  const items = (data ?? []).map((row: any) => ({
+  const items = (data as JoinedItemRow[] | null ?? []).map((row) => ({
     id: row.id,
     name: row.name,
     unit: row.unit ?? 'each',
@@ -35,7 +45,6 @@ export default async function AllItemsPage() {
 
       <ItemsAllTable items={items} />
 
-      {/* Bottom-centered navigation */}
       <div className="pt-6 flex justify-center">
         <Link href="/" className="border px-4 py-2 rounded">
           Back to Home

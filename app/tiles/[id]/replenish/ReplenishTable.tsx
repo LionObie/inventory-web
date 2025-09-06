@@ -13,11 +13,9 @@ type Item = {
 }
 
 export default function ReplenishTable({
-  tileId,
   tileName,
   items,
 }: {
-  tileId: string
   tileName: string
   items: Item[]
 }) {

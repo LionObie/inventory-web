@@ -36,7 +36,6 @@ export default async function ReplenishPage({ params }: PageProps) {
       </div>
 
       <ReplenishTable
-        tileId={tileId}
         tileName={tile.name}
         items={(items ?? []).map((it) => ({
           id: it.id,

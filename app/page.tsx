@@ -1,9 +1,8 @@
 // FILE: app/page.tsx
 import { supabase } from '@/lib/supabase'
-import TileCard from './components/TileCard'
 import { createTile } from './actions/tiles'
 import Link from 'next/link'
-import TilesGrid from './components/TilesGrid' // (we'll add this in part B)
+import TilesGrid from './components/TilesGrid'
 
 export default async function HomePage() {
   const { data: tiles } = await supabase
