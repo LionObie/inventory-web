@@ -20,7 +20,9 @@ export default async function ReplenishAllPage() {
     .order('tiles(name)', { ascending: true })
     .order('name', { ascending: true })
 
-  const items = (data as JoinedItemRow[] | null ?? []).map((row) => ({
+  const rows = (data ?? []) as JoinedItemRow[]
+
+  const items = rows.map((row) => ({
     id: row.id,
     name: row.name,
     unit: row.unit ?? 'each',
