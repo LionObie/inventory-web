@@ -3,8 +3,22 @@
 
 import { revalidatePath } from 'next/cache'
 import { supabase } from '@/lib/supabase'
-// If you added logging earlier, keep this import; otherwise you can delete it.
-import { addLog } from '@/app/actions/log'
+
+// Import addLog if you actually have app/actions/log.ts.
+// If not, we define a no-op fallback.
+let addLog: ((entry: {
+  action: string
+  entity_type: string
+  entity_id: string
+  details?: Record<string, unknown>
+}) => Promise<void>) | undefined
+
+try {
+  // Dynamic import so build won’t fail if log.ts doesn’t exist
+  addLog = require('@/app/actions/log').addLog
+} catch {
+  addLog = async () => {}
+}
 
 // Update a row's editable fields (name, unit, on_hand, max_capacity, alert_level)
 export async function updateItemAll(id: string, formData: FormData) {
@@ -25,24 +39,19 @@ export async function updateItemAll(id: string, formData: FormData) {
     alert_level,
   }).eq('id', id)
 
-  // optional log
-  try {
-    await addLog?.({
-      action: 'item.update',
-      entity_type: 'item',
-      entity_id: id,
-      details: { name, unit, on_hand, max_capacity, alert_level },
-    })
-  } catch {}
+  await addLog?.({
+    action: 'item.update',
+    entity_type: 'item',
+    entity_id: id,
+    details: { name, unit, on_hand, max_capacity, alert_level },
+  })
 
-  // refresh both All Items and its replenish view
   revalidatePath('/all')
   revalidatePath('/all/replenish')
 }
 
 // Adjust stock by a delta (positive or negative). Never go below 0.
 export async function adjustItemAll(id: string, delta: number) {
-  // get current on_hand
   const { data, error } = await supabase
     .from('items')
     .select('on_hand')
@@ -56,15 +65,12 @@ export async function adjustItemAll(id: string, delta: number) {
 
   await supabase.from('items').update({ on_hand: next }).eq('id', id)
 
-  // optional log
-  try {
-    await addLog?.({
-      action: 'item.adjust',
-      entity_type: 'item',
-      entity_id: id,
-      details: { delta, from: current, to: next },
-    })
-  } catch {}
+  await addLog?.({
+    action: 'item.adjust',
+    entity_type: 'item',
+    entity_id: id,
+    details: { delta, from: current, to: next },
+  })
 
   revalidatePath('/all')
   revalidatePath('/all/replenish')
@@ -74,14 +80,11 @@ export async function adjustItemAll(id: string, delta: number) {
 export async function deleteItemAll(id: string) {
   await supabase.from('items').delete().eq('id', id)
 
-  // optional log
-  try {
-    await addLog?.({
-      action: 'item.delete',
-      entity_type: 'item',
-      entity_id: id,
-    })
-  } catch {}
+  await addLog?.({
+    action: 'item.delete',
+    entity_type: 'item',
+    entity_id: id,
+  })
 
   revalidatePath('/all')
   revalidatePath('/all/replenish')
