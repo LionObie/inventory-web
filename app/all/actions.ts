@@ -2,60 +2,87 @@
 'use server'
 
 import { revalidatePath } from 'next/cache'
-import { redirect } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
+// If you added logging earlier, keep this import; otherwise you can delete it.
+import { addLog } from '@/app/actions/log'
 
-/** Update (auto-save) for All view: Item, On-hand, Unit, Max, Alert */
-export async function updateItemAll(itemId: string, formData: FormData) {
-  const name = String(formData.get('name') || '').trim()
-  const unit = String(formData.get('unit') || '').trim()
+// Update a row's editable fields (name, unit, on_hand, max_capacity, alert_level)
+export async function updateItemAll(id: string, formData: FormData) {
+  const name = String(formData.get('name') ?? '').trim()
+  const unit = String(formData.get('unit') ?? '').trim() || 'each'
+  const on_hand = Number(formData.get('on_hand') ?? 0)
+  const max_capacity_raw = formData.get('max_capacity')
+  const alert_level_raw = formData.get('alert_level')
 
-  const on_hand = Math.max(0, Number(formData.get('on_hand') || 0))
+  const max_capacity = max_capacity_raw === '' ? null : Number(max_capacity_raw ?? 0)
+  const alert_level = alert_level_raw === '' ? null : Number(alert_level_raw ?? 0)
 
-  const maxRaw = formData.get('max_capacity')
-  const alertRaw = formData.get('alert_level')
-  const max_capacity = !maxRaw || String(maxRaw).trim() === '' ? 0 : Math.max(0, Number(maxRaw))
-  const alert_level = !alertRaw || String(alertRaw).trim() === '' ? 0 : Math.max(0, Number(alertRaw))
+  await supabase.from('items').update({
+    name,
+    unit,
+    on_hand: Math.max(0, on_hand),
+    max_capacity,
+    alert_level,
+  }).eq('id', id)
 
-  if (!name) redirect(`/all?error=Item+name+required`)
-  if (alert_level > max_capacity) redirect(`/all?error=Alert+cannot+exceed+Max`)
-  if (on_hand < 0) redirect(`/all?error=On-hand+cannot+be+negative`)
+  // optional log
+  try {
+    await addLog?.({
+      action: 'item.update',
+      entity_type: 'item',
+      entity_id: id,
+      details: { name, unit, on_hand, max_capacity, alert_level },
+    })
+  } catch {}
 
-  await supabase
-    .from('items')
-    .update({ name, unit, on_hand, max_capacity, alert_level })
-    .eq('id', itemId)
-
+  // refresh both All Items and its replenish view
   revalidatePath('/all')
-  redirect('/all')
+  revalidatePath('/all/replenish')
 }
 
-/** Adjust stock in All view: +/- qty, never below zero */
-export async function adjustStockAll(itemId: string, formData: FormData) {
-  const qty = Math.max(1, Number(formData.get('qty') || 0))
-  const op = String(formData.get('op') || 'plus') as 'plus' | 'minus'
-
-  const { data: item, error } = await supabase
+// Adjust stock by a delta (positive or negative). Never go below 0.
+export async function adjustItemAll(id: string, delta: number) {
+  // get current on_hand
+  const { data, error } = await supabase
     .from('items')
     .select('on_hand')
-    .eq('id', itemId)
+    .eq('id', id)
     .single()
 
-  if (error || !item) redirect(`/all?error=Item+not+found`)
+  if (error) return
 
-  const current = item.on_hand ?? 0
-  const next = op === 'plus' ? current + qty : current - qty
-  if (next < 0) redirect(`/all?error=Cannot+book+out+more+than+on-hand`)
+  const current = Number(data?.on_hand ?? 0)
+  const next = Math.max(0, current + Number(delta))
 
-  await supabase.from('items').update({ on_hand: next }).eq('id', itemId)
+  await supabase.from('items').update({ on_hand: next }).eq('id', id)
+
+  // optional log
+  try {
+    await addLog?.({
+      action: 'item.adjust',
+      entity_type: 'item',
+      entity_id: id,
+      details: { delta, from: current, to: next },
+    })
+  } catch {}
 
   revalidatePath('/all')
-  redirect('/all')
+  revalidatePath('/all/replenish')
 }
 
-/** Delete an item from All view */
-export async function deleteItemAll(itemId: string) {
-  await supabase.from('items').delete().eq('id', itemId)
+// Delete item
+export async function deleteItemAll(id: string) {
+  await supabase.from('items').delete().eq('id', id)
+
+  // optional log
+  try {
+    await addLog?.({
+      action: 'item.delete',
+      entity_type: 'item',
+      entity_id: id,
+    })
+  } catch {}
+
   revalidatePath('/all')
-  redirect('/all')
+  revalidatePath('/all/replenish')
 }

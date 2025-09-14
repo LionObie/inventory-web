@@ -2,104 +2,97 @@
 'use client'
 
 import { useEffect, useRef, useState } from 'react'
-import { adjustStockAll, deleteItemAll, updateItemAll } from './actions'
+import { adjustItemAll, deleteItemAll, updateItemAll } from './actions'
 import Link from 'next/link'
 
-type ItemAll = {
+export type ItemAll = {
   id: string
   name: string
   unit: string
+  on_hand: number
   max_capacity: number
   alert_level: number
-  on_hand: number
   category: string
-  tile_id: string
+  // Make optional to match ItemsAllTable
+  tile_id?: string
 }
 
 export default function ItemRowAll({ item }: { item: ItemAll }) {
   const [editing, setEditing] = useState(false)
-
-  const [name, setName] = useState(item.name)
-  const [onHand, setOnHand] = useState<number | ''>(item.on_hand ?? 0)
-  const [unit, setUnit] = useState(item.unit ?? '')
-  const [maxCap, setMaxCap] = useState<number | ''>(item.max_capacity ?? 0)
-  const [alert, setAlert] = useState<number | ''>(item.alert_level ?? 0)
-
-  const [qty, setQty] = useState<number | ''>('') // for +/- adjust
+  const [localName, setLocalName] = useState(item.name)
+  const [onHand, setOnHand] = useState<number | ''>(item.on_hand)
+  const [unit, setUnit] = useState(item.unit)
+  const [maxCap, setMaxCap] = useState<number | ''>(item.max_capacity)
+  const [alert, setAlert] = useState<number | ''>(item.alert_level)
+  const [qty, setQty] = useState<number | ''>('')
 
   const formRef = useRef<HTMLFormElement>(null)
-  const nameRef = useRef<HTMLInputElement>(null)
+  const inputRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
-    if (editing) {
-      // refresh fields from current item and focus
-      setName(item.name)
-      setOnHand(item.on_hand ?? 0)
-      setUnit(item.unit ?? '')
-      setMaxCap(item.max_capacity ?? 0)
-      setAlert(item.alert_level ?? 0)
-      nameRef.current?.focus()
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    if (editing) inputRef.current?.focus()
   }, [editing])
 
-  const submit = () => {
-    if (!formRef.current) return
-    if (!String(name).trim()) return
+  const isDirty =
+    localName.trim() !== item.name.trim() ||
+    onHand !== item.on_hand ||
+    unit !== item.unit ||
+    maxCap !== item.max_capacity ||
+    alert !== item.alert_level
+
+  function submit() {
+    if (!isDirty || !formRef.current) return
     formRef.current.requestSubmit()
+    setEditing(false)
   }
 
-  const isDirty =
-    name !== item.name ||
-    (onHand === '' ? 0 : onHand) !== (item.on_hand ?? 0) ||
-    unit !== (item.unit ?? '') ||
-    (maxCap === '' ? 0 : maxCap) !== (item.max_capacity ?? 0) ||
-    (alert === '' ? 0 : alert) !== (item.alert_level ?? 0)
+  async function onAdjust(sign: '+' | '-') {
+    if (qty === '' || Number.isNaN(Number(qty))) return
+    const delta = sign === '+' ? Number(qty) : -Number(qty)
+    await adjustItemAll(item.id, delta)
+    setQty('')
+  }
 
   return (
-    <tr className="border-top border-t align-top">
+    <tr className="border-t">
       {/* Category */}
       <td className="p-2">
-        <Link href={`/tiles/${item.tile_id}`} className="text-blue-700 hover:underline">
-          {item.category}
-        </Link>
-      </td>
-
-      {/* Item name */}
-      <td className="p-2">
-        {editing ? (
-          <form
-            ref={formRef}
-            action={updateItemAll.bind(null, item.id)}
-            className="contents"
-            onSubmit={() => {}}
-          >
-            <input
-              ref={nameRef}
-              name="name"
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              onBlur={() => isDirty && submit()}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter') submit()
-                if (e.key === 'Escape') setEditing(false)
-              }}
-              className="border px-2 py-1 rounded w-full"
-              required
-            />
-            {/* Hidden fields to send full row each submit */}
-            <input type="hidden" name="on_hand" value={String(onHand === '' ? 0 : onHand)} />
-            <input type="hidden" name="unit" value={String(unit)} />
-            <input type="hidden" name="max_capacity" value={String(maxCap === '' ? 0 : maxCap)} />
-            <input type="hidden" name="alert_level" value={String(alert === '' ? 0 : alert)} />
-            <button type="submit" className="hidden" />
-          </form>
+        {/* Only link to the tile if we actually have a tile_id */}
+        {item.tile_id ? (
+          <Link href={`/tiles/${item.tile_id}`} className="underline">
+            {item.category}
+          </Link>
         ) : (
-          <span className="font-medium">{item.name}</span>
+          <span>{item.category}</span>
         )}
       </td>
 
-      {/* On-hand */}
+      {/* Item / editable name */}
+      <td className="p-2">
+        {editing ? (
+          <form ref={formRef} action={updateItemAll.bind(null, item.id)} onSubmit={() => {}}>
+            <input
+              ref={inputRef}
+              name="name"
+              value={localName}
+              onChange={(e) => setLocalName(e.target.value)}
+              onBlur={submit}
+              onKeyDown={(e) => e.key === 'Enter' && submit()}
+              className="border px-2 py-1 rounded w-full"
+              required
+            />
+            <input type="hidden" name="unit" value={unit} />
+            <input type="hidden" name="on_hand" value={onHand === '' ? 0 : onHand} />
+            <input type="hidden" name="max_capacity" value={maxCap === '' ? 0 : maxCap} />
+            <input type="hidden" name="alert_level" value={alert === '' ? 0 : alert} />
+            <button type="submit" className="hidden" />
+          </form>
+        ) : (
+          <span>{item.name}</span>
+        )}
+      </td>
+
+      {/* On-hand + low dot */}
       <td className="p-2 text-right">
         {editing ? (
           <input
@@ -107,16 +100,16 @@ export default function ItemRowAll({ item }: { item: ItemAll }) {
             min={0}
             value={onHand}
             onChange={(e) => setOnHand(e.target.value === '' ? '' : Number(e.target.value))}
-            onBlur={() => isDirty && submit()}
+            onBlur={submit}
             onKeyDown={(e) => e.key === 'Enter' && submit()}
             className="border px-2 py-1 rounded w-24 text-right"
           />
         ) : (
           <div className="inline-flex items-center gap-2 justify-end">
-           <span>{item.on_hand}</span>
-          {Number(item.on_hand ?? 0) <= Number(item.alert_level ?? 0) && (
-            <span className="inline-block w-2.5 h-2.5 bg-red-600 rounded-full" aria-label="low stock" />
-          )}
+            <span>{item.on_hand}</span>
+            {Number(item.on_hand ?? 0) <= Number(item.alert_level ?? 0) && (
+              <span className="inline-block w-2.5 h-2.5 bg-red-600 rounded-full" aria-label="low stock" />
+            )}
           </div>
         )}
       </td>
@@ -125,11 +118,12 @@ export default function ItemRowAll({ item }: { item: ItemAll }) {
       <td className="p-2">
         {editing ? (
           <input
+            name="unit"
             value={unit}
             onChange={(e) => setUnit(e.target.value)}
-            onBlur={() => isDirty && submit()}
+            onBlur={submit}
             onKeyDown={(e) => e.key === 'Enter' && submit()}
-            className="border px-2 py-1 rounded w-28"
+            className="border px-2 py-1 rounded w-24"
           />
         ) : (
           item.unit
@@ -144,10 +138,9 @@ export default function ItemRowAll({ item }: { item: ItemAll }) {
             min={0}
             value={maxCap}
             onChange={(e) => setMaxCap(e.target.value === '' ? '' : Number(e.target.value))}
-            onBlur={() => isDirty && submit()}
+            onBlur={submit}
             onKeyDown={(e) => e.key === 'Enter' && submit()}
             className="border px-2 py-1 rounded w-24 text-right"
-            placeholder="0"
           />
         ) : (
           item.max_capacity
@@ -162,10 +155,9 @@ export default function ItemRowAll({ item }: { item: ItemAll }) {
             min={0}
             value={alert}
             onChange={(e) => setAlert(e.target.value === '' ? '' : Number(e.target.value))}
-            onBlur={() => isDirty && submit()}
+            onBlur={submit}
             onKeyDown={(e) => e.key === 'Enter' && submit()}
             className="border px-2 py-1 rounded w-24 text-right"
-            placeholder="0"
           />
         ) : (
           item.alert_level
@@ -174,32 +166,32 @@ export default function ItemRowAll({ item }: { item: ItemAll }) {
 
       {/* Adjust */}
       <td className="p-2 text-right">
-        <form action={adjustStockAll.bind(null, item.id)} className="inline-flex items-center gap-2">
+        <div className="flex items-center justify-end gap-2">
           <input
-            name="qty"
             type="number"
-            min="1"
-            placeholder="Qty"
+            min={0}
             value={qty}
             onChange={(e) => setQty(e.target.value === '' ? '' : Number(e.target.value))}
-            className="border px-2 py-1 rounded w-24 text-right"
-            required
+            className="border px-2 py-1 rounded w-20 text-right"
+            placeholder="Qty"
           />
-          <button name="op" value="plus" className="bg-green-600 text-white px-3 py-1 rounded">+</button>
-          <button name="op" value="minus" className="bg-orange-600 text-white px-3 py-1 rounded">−</button>
-        </form>
+          <button onClick={() => onAdjust('+')} className="bg-green-600 text-white px-3 py-1 rounded">+</button>
+          <button onClick={() => onAdjust('-')} className="bg-red-600 text-white px-3 py-1 rounded">-</button>
+        </div>
       </td>
 
       {/* Actions */}
-      <td className="p-2 text-right space-x-2">
-        {!editing && (
-          <button onClick={() => setEditing(true)} className="bg-gray-800 text-white px-3 py-1 rounded">
-            Edit
-          </button>
+      <td className="p-2 text-right">
+        {editing ? (
+          <button onClick={submit} className="border px-3 py-1 rounded">Save</button>
+        ) : (
+          <div className="flex items-center justify-end gap-2">
+            <button onClick={() => setEditing(true)} className="bg-gray-800 text-white px-3 py-1 rounded">Edit</button>
+            <form action={deleteItemAll.bind(null, item.id)} className="inline">
+              <button className="bg-red-600 text-white px-3 py-1 rounded">Delete</button>
+            </form>
+          </div>
         )}
-        <form action={deleteItemAll.bind(null, item.id)} className="inline">
-          <button className="bg-red-600 text-white px-3 py-1 rounded">Delete</button>
-        </form>
       </td>
     </tr>
   )

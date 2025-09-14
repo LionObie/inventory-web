@@ -3,6 +3,7 @@ import Link from 'next/link'
 import { supabase } from '@/lib/supabase'
 import ItemsAllTable from './ItemsAllTable'
 
+type TileObj = { id?: string; name?: string }
 type JoinedItemRow = {
   id: string
   name: string
@@ -10,7 +11,13 @@ type JoinedItemRow = {
   on_hand: number | null
   max_capacity: number | null
   alert_level: number | null
-  tiles?: { id?: string; name: string }
+  // Supabase can return relation as object OR array depending on join shape
+  tiles?: TileObj | TileObj[]
+}
+
+function firstTile(tiles?: TileObj | TileObj[]) {
+  if (!tiles) return undefined
+  return Array.isArray(tiles) ? tiles[0] : tiles
 }
 
 export default async function AllItemsPage() {
@@ -22,16 +29,19 @@ export default async function AllItemsPage() {
 
   const rows = (data ?? []) as JoinedItemRow[]
 
-  const items = rows.map((row) => ({
-    id: row.id,
-    name: row.name,
-    unit: row.unit ?? 'each',
-    on_hand: Number(row.on_hand ?? 0),
-    max_capacity: Number(row.max_capacity ?? 0),
-    alert_level: Number(row.alert_level ?? 0),
-    category: row.tiles?.name ?? 'Unknown',
-    tile_id: row.tiles?.id,
-  }))
+  const items = rows.map((row) => {
+    const t = firstTile(row.tiles)
+    return {
+      id: row.id,
+      name: row.name,
+      unit: row.unit ?? 'each',
+      on_hand: Number(row.on_hand ?? 0),
+      max_capacity: Number(row.max_capacity ?? 0),
+      alert_level: Number(row.alert_level ?? 0),
+      category: t?.name ?? 'Unknown',
+      tile_id: t?.id,
+    }
+  })
 
   return (
     <div className="p-8 max-w-6xl mx-auto space-y-6">

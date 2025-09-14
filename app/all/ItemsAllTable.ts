@@ -4,15 +4,16 @@
 import { useMemo, useState } from 'react'
 import ItemRowAll from './ItemRowAll'
 
-type RowItem = {
+export type RowItem = {
   id: string
   name: string
   unit: string
+  on_hand: number
   max_capacity: number
   alert_level: number
-  on_hand: number
   category: string
-  tile_id: string
+  // Make this optional to handle cases where join didn't return an id
+  tile_id?: string
 }
 
 export default function ItemsAllTable({ items }: { items: RowItem[] }) {
